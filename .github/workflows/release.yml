@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build binaries
+        env:
+          LDFLAGS: "-X main.version=${{ github.ref_name }}"
+        run: |
+          GOOS=linux   GOARCH=amd64 go build -ldflags "$LDFLAGS" -o cb-cicd-linux-amd64   .
+          GOOS=linux   GOARCH=arm64 go build -ldflags "$LDFLAGS" -o cb-cicd-linux-arm64   .
+          GOOS=darwin  GOARCH=amd64 go build -ldflags "$LDFLAGS" -o cb-cicd-darwin-amd64  .
+          GOOS=darwin  GOARCH=arm64 go build -ldflags "$LDFLAGS" -o cb-cicd-darwin-arm64  .
+          GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o cb-cicd-windows-amd64.exe .
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            cb-cicd-linux-amd64
+            cb-cicd-linux-arm64
+            cb-cicd-darwin-amd64
+            cb-cicd-darwin-arm64
+            cb-cicd-windows-amd64.exe

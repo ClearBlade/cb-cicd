@@ -1,0 +1,37 @@
+name: Sync ClearBlade Resources
+description: Syncs ClearBlade platform resources to a target system using cb-cicd
+
+inputs:
+  config:
+    description: Path to cicd-config.json
+    required: false
+    default: ./cicd-config.json
+  files:
+    description: Space-separated list of -file flags to pass to cb-cicd
+    required: false
+    default: ''
+  version:
+    description: cb-cicd release version to download
+    required: false
+    default: latest
+
+runs:
+  using: composite
+  steps:
+    - name: Download cb-cicd
+      shell: bash
+      run: |
+        VERSION=${{ inputs.version }}
+        if [ "$VERSION" = "latest" ]; then
+          URL="https://github.com/clearblade/cb-cicd/releases/latest/download/cb-cicd-linux-amd64"
+        else
+          URL="https://github.com/clearblade/cb-cicd/releases/download/${VERSION}/cb-cicd-linux-amd64"
+        fi
+        curl -fsSL "$URL" -o /usr/local/bin/cb-cicd && chmod +x /usr/local/bin/cb-cicd
+
+    - name: Sync resources
+      shell: bash
+      run: |
+        cb-cicd run \
+          -config ${{ inputs.config }} \
+          ${{ inputs.files }}

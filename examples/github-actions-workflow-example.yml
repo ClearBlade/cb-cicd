@@ -1,0 +1,61 @@
+name: Sync ClearBlade Resources
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - qa
+      - prod
+
+jobs:
+  sync-system-one:
+    runs-on: ubuntu-latest
+    environment: ${{ github.base_ref }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files in system-one
+        id: changed
+        run: |
+          FILES=$(git diff --name-only origin/${{ github.base_ref }} HEAD -- system-one/ | sed 's|^system-one/||' | xargs -I{} echo "-file system-one/{}" | tr '\n' ' ')
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+
+      - name: Sync system-one
+        uses: clearblade/cb-cicd@latest
+        env:
+          CICD_EMAIL: ${{ secrets.CLEARBLADE_EMAIL }}
+          CICD_PASSWORD: ${{ secrets.CLEARBLADE_PASSWORD }}
+          CICD_SYSTEM_KEY: ${{ secrets.CLEARBLADE_SYSTEM_KEY }}
+          CICD_URL: ${{ vars.CLEARBLADE_URL }}
+        with:
+          config: ./system-one/cicd-config.json
+          files: ${{ steps.changed.outputs.files }}
+
+  sync-system-two:
+    runs-on: ubuntu-latest
+    environment: ${{ github.base_ref }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files in system-two
+        id: changed
+        run: |
+          FILES=$(git diff --name-only origin/${{ github.base_ref }} HEAD -- system-two/ | sed 's|^system-two/||' | xargs -I{} echo "-file system-two/{}" | tr '\n' ' ')
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+
+      - name: Sync system-two
+        uses: clearblade/cb-cicd@latest
+        env:
+          CICD_EMAIL: ${{ secrets.CLEARBLADE_EMAIL_2 }}
+          CICD_PASSWORD: ${{ secrets.CLEARBLADE_PASSWORD_2 }}
+          CICD_SYSTEM_KEY: ${{ secrets.CLEARBLADE_SYSTEM_KEY_2 }}
+          CICD_URL: ${{ vars.CLEARBLADE_URL_2 }}
+        with:
+          config: ./system-two/cicd-config.json
+          files: ${{ steps.changed.outputs.files }}
