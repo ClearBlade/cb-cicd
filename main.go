@@ -43,7 +43,7 @@ Flags:
   -system-key <string>   ClearBlade system key         (env: CICD_SYSTEM_KEY)
   -url        <string>   ClearBlade platform URL       (env: CICD_URL)
   -config     <string>   path to cicd-config.json      (default: ./cicd-config.json)
-  -all                   sync all whitelisted resources (ignores -file)
+  -all                   sync all whitelisted resources; required if no -file flags are provided
   -file       <path>     changed file path             (repeatable)
 
 Authentication: provide either -dev-token or both -email and -password.
@@ -155,9 +155,12 @@ func runSync(rf runFlags, isDryRun bool) error {
 
 	// Determine which resources are in scope.
 	var resources []SyncResource
-	if rf.all || len(rf.files) == 0 {
+	if rf.all {
 		resources = cfg.SyncResources
 		fmt.Printf("Syncing all %d whitelisted resources.\n", len(resources))
+	} else if len(rf.files) == 0 {
+		fmt.Println("No files specified and -all not set; nothing to sync.")
+		return nil
 	} else {
 		resources = MatchResources(rf.files, cfg.SyncResources)
 		if len(resources) == 0 {
