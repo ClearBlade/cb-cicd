@@ -28,3 +28,17 @@ func newClient(platformURL, email, password string) (*cb.DevClient, error) {
 	}
 	return client, nil
 }
+
+// newClientWithToken creates a ClearBlade DevClient pre-authenticated via a dev token.
+func newClientWithToken(platformURL, token string) (*cb.DevClient, error) {
+	if platformURL == "" {
+		return nil, fmt.Errorf("platform URL is required")
+	}
+	if token == "" {
+		return nil, fmt.Errorf("dev token is required")
+	}
+
+	platformURL = strings.TrimRight(platformURL, "/")
+
+	return cb.NewDevClientWithTokenAndAddrs(platformURL, "", token, ""), nil
+}

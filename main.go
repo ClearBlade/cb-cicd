@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	cb "github.com/clearblade/Go-SDK"
 )
 
 const defaultConfigPath = "./cicd-config.json"
@@ -12,6 +14,7 @@ var version = "dev"
 
 type runFlags struct {
 	files      []string
+	devToken   string
 	email      string
 	password   string
 	systemKey  string
@@ -34,6 +37,7 @@ Subcommands:
   help  show this help message
 
 Flags:
+  -dev-token  <string>   ClearBlade developer token    (env: CICD_DEV_TOKEN)
   -email      <string>   ClearBlade developer email    (env: CICD_EMAIL)
   -password   <string>   ClearBlade developer password (env: CICD_PASSWORD)
   -system-key <string>   ClearBlade system key         (env: CICD_SYSTEM_KEY)
@@ -41,6 +45,8 @@ Flags:
   -config     <string>   path to cicd-config.json      (default: ./cicd-config.json)
   -all                   sync all whitelisted resources (ignores -file)
   -file       <path>     changed file path             (repeatable)
+
+Authentication: provide either -dev-token or both -email and -password.
 `
 
 func main() {
@@ -68,6 +74,7 @@ func main() {
 	fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
 
 	var files multiFlag
+	devToken := fs.String("dev-token", "", "ClearBlade developer token")
 	email := fs.String("email", "", "ClearBlade developer email")
 	password := fs.String("password", "", "ClearBlade developer password")
 	systemKey := fs.String("system-key", "", "ClearBlade system key")
@@ -82,6 +89,9 @@ func main() {
 	}
 
 	// Env var fallbacks for secrets.
+	if *devToken == "" {
+		*devToken = os.Getenv("CICD_DEV_TOKEN")
+	}
 	if *email == "" {
 		*email = os.Getenv("CICD_EMAIL")
 	}
@@ -97,6 +107,7 @@ func main() {
 
 	rf := runFlags{
 		files:      files,
+		devToken:   *devToken,
 		email:      *email,
 		password:   *password,
 		systemKey:  *systemKey,
@@ -125,11 +136,19 @@ func runSync(rf runFlags, isDryRun bool) error {
 		return err
 	}
 
-	if rf.email == "" || rf.password == "" || rf.systemKey == "" || rf.url == "" {
-		return fmt.Errorf("email, password, system-key, and url are all required (set via flags or CICD_EMAIL / CICD_PASSWORD / CICD_SYSTEM_KEY / CICD_URL)")
+	if rf.systemKey == "" || rf.url == "" {
+		return fmt.Errorf("system-key and url are required (set via flags or CICD_SYSTEM_KEY / CICD_URL)")
 	}
 
-	client, err := newClient(rf.url, rf.email, rf.password)
+	var client *cb.DevClient
+	switch {
+	case rf.devToken != "":
+		client, err = newClientWithToken(rf.url, rf.devToken)
+	case rf.email != "" && rf.password != "":
+		client, err = newClient(rf.url, rf.email, rf.password)
+	default:
+		return fmt.Errorf("authentication required: provide -dev-token (or CICD_DEV_TOKEN) or both -email and -password")
+	}
 	if err != nil {
 		return err
 	}
