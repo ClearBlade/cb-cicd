@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -32,6 +33,11 @@ func BuildTempDir(systemDir string, resources []SyncResource) (string, error) {
 				if err := copyFile(src, dst); err != nil {
 					return tempDir, fmt.Errorf("resource %q: %w", r.Name, err)
 				}
+				if r.Type == "collection_schema" {
+					if err := stripCollectionItems(dst); err != nil {
+						return tempDir, fmt.Errorf("resource %q: strip items: %w", r.Name, err)
+					}
+				}
 			}
 		}
 	}
@@ -57,6 +63,26 @@ func copyFile(src, dst string) error {
 
 	_, err = io.Copy(out, in)
 	return err
+}
+
+// stripCollectionItems removes the "items" key from a collection JSON file so
+// that only schema (columns, indexes) is uploaded — row data is left untouched
+// on the platform. This mirrors cblib's copyCollectionSchemaToZip behavior.
+func stripCollectionItems(path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return err
+	}
+	delete(m, "items")
+	out, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0644)
 }
 
 func copyDir(src, dst string) error {

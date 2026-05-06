@@ -22,7 +22,7 @@ func ResourcePaths(r SyncResource) ([]ResourcePath, error) {
 	case "library":
 		return []ResourcePath{{Path: fmt.Sprintf("code/libraries/%s", n), IsDir: true}}, nil
 
-	// Collections (schema-only or with rows — same file on disk)
+	// Both types share the same file on disk; BuildTempDir strips "items" for collection_schema.
 	case "collection", "collection_schema":
 		return []ResourcePath{{Path: fmt.Sprintf("data/%s.json", n)}}, nil
 
