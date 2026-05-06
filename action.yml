@@ -2,8 +2,12 @@ name: Sync ClearBlade Resources
 description: Syncs ClearBlade platform resources to a target system using cb-cicd
 
 inputs:
+  dir:
+    description: Working directory (cblib system root) to run cb-cicd from
+    required: false
+    default: '.'
   config:
-    description: Path to cicd-config.json
+    description: Path to cicd-config.json (relative to dir)
     required: false
     default: ./cicd-config.json
   files:
@@ -31,6 +35,7 @@ runs:
 
     - name: Sync resources
       shell: bash
+      working-directory: ${{ inputs.dir }}
       run: |
         cb-cicd run \
           -config ${{ inputs.config }} \
