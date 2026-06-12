@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	cb "github.com/clearblade/Go-SDK"
 )
@@ -29,6 +30,89 @@ type multiFlag []string
 func (m *multiFlag) String() string     { return fmt.Sprintf("%v", *m) }
 func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
+// parseRunFlags parses run/test flags. Any positional argument left after flag
+// parsing is rejected: Go's flag package stops at the first non-flag token, so a
+// leftover positional means an unquoted path with a space shattered the argument
+// list — silently dropping every -file after it and truncating the sync scope.
+func parseRunFlags(name string, args []string) (runFlags, error) {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+
+	var files multiFlag
+	devToken := fs.String("dev-token", "", "ClearBlade developer token")
+	email := fs.String("email", "", "ClearBlade developer email")
+	password := fs.String("password", "", "ClearBlade developer password")
+	systemKey := fs.String("system-key", "", "ClearBlade system key")
+	url := fs.String("url", "", "ClearBlade platform URL")
+	all := fs.Bool("all", false, "sync all whitelisted resources, ignoring -file/-files-from")
+	configPath := fs.String("config", defaultConfigPath, "path to cicd-config.json")
+	filesFrom := fs.String("files-from", "", "file containing newline-delimited changed file paths")
+	fs.Var(&files, "file", "changed file path (repeatable)")
+
+	if err := fs.Parse(args); err != nil {
+		return runFlags{}, err
+	}
+
+	if fs.NArg() > 0 {
+		return runFlags{}, fmt.Errorf(
+			"unexpected positional argument(s) %q — a file path containing a space was split by the shell; pass paths via -files-from (newline-delimited file) or quote each -file value",
+			fs.Args())
+	}
+
+	if *filesFrom != "" {
+		fromFile, err := readFilesFrom(*filesFrom)
+		if err != nil {
+			return runFlags{}, err
+		}
+		files = append(files, fromFile...)
+	}
+
+	// Env var fallbacks for secrets.
+	if *devToken == "" {
+		*devToken = os.Getenv("CICD_DEV_TOKEN")
+	}
+	if *email == "" {
+		*email = os.Getenv("CICD_EMAIL")
+	}
+	if *password == "" {
+		*password = os.Getenv("CICD_PASSWORD")
+	}
+	if *systemKey == "" {
+		*systemKey = os.Getenv("CICD_SYSTEM_KEY")
+	}
+	if *url == "" {
+		*url = os.Getenv("CICD_URL")
+	}
+
+	return runFlags{
+		files:      files,
+		devToken:   *devToken,
+		email:      *email,
+		password:   *password,
+		systemKey:  *systemKey,
+		url:        *url,
+		all:        *all,
+		configPath: *configPath,
+	}, nil
+}
+
+// readFilesFrom reads a newline-delimited list of file paths, tolerating CRLF
+// line endings and skipping blank lines. Paths may contain spaces.
+func readFilesFrom(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("could not read -files-from list: %w", err)
+	}
+	var files []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimRight(line, "\r")
+		line = strings.TrimSpace(line)
+		if line != "" {
+			files = append(files, line)
+		}
+	}
+	return files, nil
+}
+
 const helpText = `usage: cb-cicd <run|test|help> [flags]
 
 Subcommands:
@@ -45,6 +129,8 @@ Flags:
   -config     <string>   path to cicd-config.json      (default: ./cicd-config.json)
   -all                   sync all whitelisted resources; required if no -file flags are provided
   -file       <path>     changed file path             (repeatable)
+  -files-from <path>     file containing newline-delimited changed file paths
+                         (safe for paths with spaces; combined with -file)
 
 Authentication: provide either -dev-token or both -email and -password.
 `
@@ -71,52 +157,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	fs := flag.NewFlagSet(subcommand, flag.ExitOnError)
-
-	var files multiFlag
-	devToken := fs.String("dev-token", "", "ClearBlade developer token")
-	email := fs.String("email", "", "ClearBlade developer email")
-	password := fs.String("password", "", "ClearBlade developer password")
-	systemKey := fs.String("system-key", "", "ClearBlade system key")
-	url := fs.String("url", "", "ClearBlade platform URL")
-	all := fs.Bool("all", false, "sync all whitelisted resources, ignoring -file flags")
-	configPath := fs.String("config", defaultConfigPath, "path to cicd-config.json")
-	fs.Var(&files, "file", "changed file path (repeatable)")
-
-	if err := fs.Parse(os.Args[2:]); err != nil {
+	rf, err := parseRunFlags(subcommand, os.Args[2:])
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "flag error: %s\n", err)
 		os.Exit(1)
 	}
 
-	// Env var fallbacks for secrets.
-	if *devToken == "" {
-		*devToken = os.Getenv("CICD_DEV_TOKEN")
-	}
-	if *email == "" {
-		*email = os.Getenv("CICD_EMAIL")
-	}
-	if *password == "" {
-		*password = os.Getenv("CICD_PASSWORD")
-	}
-	if *systemKey == "" {
-		*systemKey = os.Getenv("CICD_SYSTEM_KEY")
-	}
-	if *url == "" {
-		*url = os.Getenv("CICD_URL")
-	}
-
-	rf := runFlags{
-		files:      files,
-		devToken:   *devToken,
-		email:      *email,
-		password:   *password,
-		systemKey:  *systemKey,
-		url:        *url,
-		all:        *all,
-		configPath: *configPath,
-	}
-
-	var err error
 	switch subcommand {
 	case "run":
 		err = runSync(rf, false)

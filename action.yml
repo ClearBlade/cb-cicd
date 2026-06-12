@@ -11,7 +11,15 @@ inputs:
     required: false
     default: ./cicd-config.json
   files:
-    description: Space-separated list of -file flags to pass to cb-cicd
+    description: >-
+      Space-separated list of -file flags to pass to cb-cicd. Unsafe for file
+      paths containing spaces — prefer files-from.
+    required: false
+    default: ''
+  files-from:
+    description: >-
+      Path to a newline-delimited list of changed file paths (relative to dir).
+      Safe for paths with spaces; takes effect alongside (or instead of) files.
     required: false
     default: ''
   version:
@@ -37,6 +45,13 @@ runs:
       shell: bash
       working-directory: ${{ inputs.dir }}
       run: |
-        cb-cicd run \
-          -config ${{ inputs.config }} \
-          ${{ inputs.files }}
+        if [ -n "${{ inputs.files-from }}" ]; then
+          cb-cicd run \
+            -config "${{ inputs.config }}" \
+            -files-from "${{ inputs.files-from }}" \
+            ${{ inputs.files }}
+        else
+          cb-cicd run \
+            -config "${{ inputs.config }}" \
+            ${{ inputs.files }}
+        fi
