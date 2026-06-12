@@ -8,10 +8,10 @@ import (
 )
 
 func TestParseRunFlagsRejectsPositionalArgs(t *testing.T) {
-	// A path with a space, unquoted, shatters into a flag value + a positional
-	// token ("APIs.postman_collection.json"). Go's flag package stops parsing
-	// there, silently dropping every -file after it — which truncated a real
-	// sync's scope to nothing. This must be a hard error, not a silent no-op.
+	// An unquoted path with a space shatters into a flag value plus a positional
+	// token. Go's flag package stops parsing at the first positional, silently
+	// dropping every -file after it — so leftover positionals must be a hard
+	// error, never a silently truncated file list.
 	args := []string{
 		"-file", "api-spec/ClearBlade", "APIs.postman_collection.json",
 		"-file", "code/services/api_createMqttDevice/api_createMqttDevice.js",
