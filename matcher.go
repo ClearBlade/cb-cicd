@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 // MatchResources returns the subset of whitelist entries that have at least one
 // corresponding path matching a changed file. Directory resources match if any
@@ -17,6 +20,19 @@ func MatchResources(changedFiles []string, whitelist []SyncResource) []SyncResou
 		}
 	}
 	return matched
+}
+
+// WhitelistFileChanged reports whether the cicd-config (whitelist) file itself is
+// among the changed files. Changed-file paths are relative to the system dir
+// (e.g. "cicd-config.json"), so we match on the config's basename.
+func WhitelistFileChanged(changedFiles []string, configPath string) bool {
+	base := filepath.Base(configPath)
+	for _, f := range changedFiles {
+		if filepath.Base(f) == base {
+			return true
+		}
+	}
+	return false
 }
 
 func anyPathMatches(paths []ResourcePath, changedFiles []string) bool {

@@ -201,13 +201,24 @@ func runSync(rf runFlags, isDryRun bool) error {
 
 	// Determine which resources are in scope.
 	var resources []SyncResource
-	if rf.all {
+	switch {
+	case rf.all:
 		resources = cfg.SyncResources
 		fmt.Printf("Syncing all %d whitelisted resources.\n", len(resources))
-	} else if len(rf.files) == 0 {
+	case len(rf.files) == 0:
 		fmt.Println("No files specified and -all not set; nothing to sync.")
 		return nil
-	} else {
+	case WhitelistFileChanged(rf.files, rf.configPath):
+		// The whitelist itself (cicd-config.json) changed in this push. A resource
+		// that was added to the whitelist but whose source file was committed in an
+		// EARLIER push will NOT appear in this push's changed-file diff, so matching
+		// changed files against the whitelist would silently skip it. Re-sync the
+		// full whitelist so newly whitelisted entries deploy. Pushes are idempotent
+		// (unchanged resources are no-ops), so this re-asserts the whitelist for
+		// this system whenever the whitelist is edited.
+		resources = cfg.SyncResources
+		fmt.Printf("Whitelist (%s) changed; syncing all %d whitelisted resources to catch newly whitelisted entries.\n", rf.configPath, len(resources))
+	default:
 		resources = MatchResources(rf.files, cfg.SyncResources)
 		if len(resources) == 0 {
 			fmt.Println("No whitelisted resources matched the provided files; nothing to sync.")
