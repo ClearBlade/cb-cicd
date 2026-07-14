@@ -101,6 +101,65 @@ Each entry requires a `name` and a `type`. For collection resources you can also
 
 # Commands
 
+## reconcile
+
+**cb-cicd reconcile**: Push the ENTIRE whitelist, converging the system on the repo.
+
+### Synopsis
+
+```
+cb-cicd reconcile
+    [-email      <string>]
+    [-password   <string>]
+    [-system-key <string>]
+    [-url        <string>]
+    [-config     <path>]
+    [-dry-run]
+```
+
+### Description
+
+Packages every whitelisted resource into a zip and uploads it. Desired state is the whitelist plus the repo's content; the platform upsert converges the system onto it. There is no diff scope and no memory of previous runs, so a failed run is repaired by the next one, a whitelist-only change deploys the resource it names, and a brand-new system bootstraps with no special case. Pushing an unchanged resource is a server-side no-op, so reconciling repeatedly is safe.
+
+`-dry-run` returns the platform's semantic diff — only resources whose meaningful content differs are reported (platform-assigned fields such as `system_key`, `uuid`, `version`, and `code_hash` are ignored and rewritten on apply) — which makes it an accurate drift report.
+
+Reconcile never deletes anything: removing a whitelist entry stops managing a resource but leaves it on the platform. Use `prune` for that, deliberately.
+
+## prune
+
+**cb-cicd prune**: Delete named resources from the platform after their whitelist entries are removed.
+
+### Synopsis
+
+```
+cb-cicd prune <type:name> [<type:name> ...]
+    [-email      <string>]
+    [-password   <string>]
+    [-system-key <string>]
+    [-url        <string>]
+    [-config     <path>]
+    [-dry-run]
+```
+
+### Description
+
+The zip upload only upserts, so a resource removed from the repo keeps running in every environment it ever reached. `prune` closes that gap — statelessly and deliberately: the operator names each resource (`service:oldService timer:oldTimer`), because a whitelist removal arrives as a reviewed diff and deleting a live resource deserves a human decision. Never run it from CI.
+
+- Refuses anything still whitelisted in `-config` — the next reconcile would just recreate it, so the request is almost certainly a mistake.
+- `-dry-run` prints the plan without authenticating.
+- Types with no platform delete call (schema singletons, `bucket_set_files`, `user`/`device`/`edge`) are reported as **manual** rather than skipped silently.
+- Pruning a resource that is already gone fails loudly ("not found — already gone?").
+
+#### Examples
+
+```
+cb-cicd prune -dry-run service:autoCurveGeneration timer:autoCurveGenerationTimer
+```
+
+```
+cb-cicd prune service:autoCurveGeneration timer:autoCurveGenerationTimer
+```
+
 ## run
 
 **cb-cicd run**: Sync matched resources to the ClearBlade platform.
