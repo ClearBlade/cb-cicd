@@ -1,66 +1,8 @@
 package main
 
 import (
-	"encoding/json"
-	"reflect"
 	"testing"
 )
-
-func TestSetFromResourcesAndKeys(t *testing.T) {
-	s := setFromResources([]SyncResource{
-		{Name: "api_foo", Type: "service"},
-		{Name: "device_import", Type: "collection_schema"},
-	})
-	if !s["service:api_foo"] || !s["collection_schema:device_import"] {
-		t.Fatalf("unexpected set contents: %v", s)
-	}
-	typ, name := keyParts("collection_schema:device_import")
-	if typ != "collection_schema" || name != "device_import" {
-		t.Fatalf("keyParts got %q %q", typ, name)
-	}
-}
-
-func TestUnionAndSubtract(t *testing.T) {
-	prev := managedSet{"service:a": true, "service:b": true, "timer:t": true}
-	curr := managedSet{"service:a": true, "service:c": true}
-
-	managed := union(prev, curr)
-	for _, k := range []string{"service:a", "service:b", "service:c", "timer:t"} {
-		if !managed[k] {
-			t.Fatalf("union missing %s", k)
-		}
-	}
-
-	// Stale = managed − current: b and t were applied before and are no longer
-	// whitelisted; a is still whitelisted; c is new.
-	stale := subtract(managed, curr)
-	want := []string{"service:b", "timer:t"}
-	if !reflect.DeepEqual(stale, want) {
-		t.Fatalf("subtract = %v, want %v", stale, want)
-	}
-
-	// Bootstrap: no previous state means nothing is stale, whatever is whitelisted.
-	if got := subtract(union(nil, curr), curr); len(got) != 0 {
-		t.Fatalf("bootstrap subtract should be empty, got %v", got)
-	}
-}
-
-func TestStateRowRoundTrip(t *testing.T) {
-	managed := managedSet{"service:z": true, "service:a": true}
-	keys := subtract(managed, managedSet{})
-	blob, err := json.Marshal(stateRow{Managed: keys, AppliedAt: "2026-07-14T00:00:00Z", Tool: "test"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var sr stateRow
-	if err := json.Unmarshal(blob, &sr); err != nil {
-		t.Fatal(err)
-	}
-	// Sorted, complete.
-	if !reflect.DeepEqual(sr.Managed, []string{"service:a", "service:z"}) {
-		t.Fatalf("round-trip managed = %v", sr.Managed)
-	}
-}
 
 // Every type ResourcePaths can deploy must be either auto-deletable or an
 // explicit, deliberate "manual" — a type silently absent from both would make
@@ -110,7 +52,33 @@ func TestPrunePlanMarksManualTypes(t *testing.T) {
 }
 
 func TestReconcileFlagsRejectPositional(t *testing.T) {
-	if _, err := parseReconcileFlags([]string{"-prune", "stray arg"}); err == nil {
+	if _, err := parseReconcileFlags([]string{"stray arg"}); err == nil {
 		t.Fatal("positional args must be rejected")
+	}
+}
+
+func TestPruneFlagsRequireValidKeys(t *testing.T) {
+	if _, err := parsePruneFlags([]string{}); err == nil {
+		t.Fatal("prune with no keys must be rejected")
+	}
+	if _, err := parsePruneFlags([]string{"notakey"}); err == nil {
+		t.Fatal("a key without type: must be rejected")
+	}
+	pf, err := parsePruneFlags([]string{"-dry-run", "service:dead", "timer:old"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pf.dryRun || len(pf.keys) != 2 || pf.keys[0] != "service:dead" {
+		t.Fatalf("unexpected parse: %+v", pf)
+	}
+}
+
+func TestKeyParts(t *testing.T) {
+	typ, name := keyParts("collection_schema:device_import")
+	if typ != "collection_schema" || name != "device_import" {
+		t.Fatalf("keyParts got %q %q", typ, name)
+	}
+	if typ, _ := keyParts("notakey"); typ != "" {
+		t.Fatalf("bare key should yield empty type, got %q", typ)
 	}
 }

@@ -8,17 +8,21 @@ import (
 	cb "github.com/clearblade/Go-SDK"
 )
 
-// reconcile pushes the ENTIRE whitelist every run and reports (optionally deletes)
-// whatever this tool previously applied that is no longer whitelisted.
+// reconcile pushes the ENTIRE whitelist every run: desired state = whitelist +
+// repo content, and the platform upsert converges the system onto it.
 //
 // This replaces diff-scoped syncing. A diff sync must remember what it last
 // applied, and that memory — a git tag, a workflow event payload — is a claim
 // rather than an observation, so it eventually lies: a failed sync strands its
 // range behind a green checkmark, a whitelist-only change matches no files and
 // deploys nothing, a new system never bootstraps. Reconcile has none of those
-// states: desired = whitelist + repo content, and the platform upsert makes
-// actual converge on desired. Pushing an unchanged artifact is a no-op, so
-// converging repeatedly is safe and a failed run is repaired by the next one.
+// states: pushing an unchanged artifact is a no-op, so converging repeatedly is
+// safe and a failed run is repaired by the next one.
+//
+// Reconcile is deliberately STATELESS. Deletion — the one thing convergence
+// cannot infer — is not guessed at from recorded state: a whitelist removal
+// arrives as a reviewed PR diff, so the operator names the artifact explicitly
+// via `cb-cicd prune <type:name>`. CI never deletes anything.
 
 type reconcileFlags struct {
 	devToken   string
@@ -27,7 +31,6 @@ type reconcileFlags struct {
 	systemKey  string
 	url        string
 	configPath string
-	prune      bool
 	dryRun     bool
 }
 
@@ -40,8 +43,7 @@ func parseReconcileFlags(args []string) (reconcileFlags, error) {
 	systemKey := fs.String("system-key", "", "ClearBlade system key")
 	url := fs.String("url", "", "ClearBlade platform URL")
 	configPath := fs.String("config", defaultConfigPath, "path to cicd-config.json")
-	prune := fs.Bool("prune", false, "delete previously managed artifacts that are no longer whitelisted")
-	dryRun := fs.Bool("dry-run", false, "show what would be pushed and pruned without changing anything")
+	dryRun := fs.Bool("dry-run", false, "show what would change without pushing (the platform's semantic diff)")
 
 	if err := fs.Parse(args); err != nil {
 		return reconcileFlags{}, err
@@ -73,7 +75,6 @@ func parseReconcileFlags(args []string) (reconcileFlags, error) {
 		systemKey:  *systemKey,
 		url:        *url,
 		configPath: *configPath,
-		prune:      *prune,
 		dryRun:     *dryRun,
 	}, nil
 }
@@ -100,17 +101,6 @@ func runReconcile(rf reconcileFlags) error {
 		return err
 	}
 
-	// Read the previously managed set BEFORE pushing, so a push failure leaves the
-	// recorded state describing what was actually last applied.
-	previous, hasState, err := LoadManagedSet(client, rf.systemKey)
-	if err != nil {
-		return err
-	}
-	if !hasState {
-		fmt.Printf("No %s state found — first reconcile of this system (bootstrap). Prune is unavailable until a managed set has been recorded.\n", stateCollection)
-	}
-
-	// Push the whole whitelist.
 	fmt.Printf("Reconciling all %d whitelisted resources.\n", len(cfg.SyncResources))
 	for _, r := range cfg.SyncResources {
 		fmt.Printf("  → %s (%s)\n", r.Name, r.Type)
@@ -127,61 +117,5 @@ func runReconcile(rf reconcileFlags) error {
 	}
 	defer os.RemoveAll(tempDir)
 
-	if err := PushTempDir(tempDir, rf.systemKey, client, rf.dryRun); err != nil {
-		return err
-	}
-
-	// Compute the prune set. managed = everything we have ever applied and not yet
-	// pruned; stale = managed − currently whitelisted. The state collection itself
-	// is never pruned: deleting it would destroy the managed-set memory and turn
-	// every later reconcile into a bootstrap.
-	current := setFromResources(cfg.SyncResources)
-	managed := union(previous, current)
-	stale := make([]string, 0)
-	for _, key := range subtract(managed, current) {
-		if _, name := keyParts(key); name == stateCollection {
-			continue
-		}
-		stale = append(stale, key)
-	}
-
-	if len(stale) == 0 {
-		fmt.Println("Prune: nothing stale — every managed artifact is still whitelisted.")
-	} else {
-		fmt.Printf("Prune: %d managed artifact(s) are no longer whitelisted:\n", len(stale))
-		for _, o := range PrunePlan(stale) {
-			suffix := ""
-			if o.Detail != "" {
-				suffix = " — " + o.Detail
-			}
-			fmt.Printf("  ✂ %s [%s]%s\n", o.Key, o.Action, suffix)
-		}
-	}
-
-	if rf.dryRun {
-		fmt.Println("Dry run: no state written, nothing pruned.")
-		return nil
-	}
-
-	if len(stale) > 0 && rf.prune {
-		deleted, outcomes := ExecutePrune(client, rf.systemKey, stale)
-		for _, o := range outcomes {
-			suffix := ""
-			if o.Detail != "" {
-				suffix = " — " + o.Detail
-			}
-			fmt.Printf("  ✂ %s [%s]%s\n", o.Key, o.Action, suffix)
-		}
-		for _, key := range deleted {
-			delete(managed, key)
-		}
-	} else if len(stale) > 0 {
-		fmt.Println("Pass -prune to delete them. They remain in the managed set until pruned.")
-	}
-
-	if err := SaveManagedSet(client, rf.systemKey, managed); err != nil {
-		// The push succeeded; only the bookkeeping failed. Say so precisely.
-		return fmt.Errorf("push succeeded but recording the managed set failed (next run will still converge): %w", err)
-	}
-	return nil
+	return PushTempDir(tempDir, rf.systemKey, client, rf.dryRun)
 }
