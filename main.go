@@ -113,12 +113,15 @@ func readFilesFrom(path string) ([]string, error) {
 	return files, nil
 }
 
-const helpText = `usage: cb-cicd <run|test|help> [flags]
+const helpText = `usage: cb-cicd <run|test|reconcile|help> [flags]
 
 Subcommands:
-  run   sync matched resources to the ClearBlade platform
-  test  dry run — shows what would be synced without pushing
-  help  show this help message
+  run        sync matched resources to the ClearBlade platform
+  test       dry run — shows what would be synced without pushing
+  reconcile  push the ENTIRE whitelist (converges the system on the repo) and
+             report artifacts previously applied that are no longer whitelisted;
+             -prune deletes them, -dry-run previews everything
+  help       show this help message
 
 Flags:
   -dev-token  <string>   ClearBlade developer token    (env: CICD_DEV_TOKEN)
@@ -152,8 +155,21 @@ func main() {
 		return
 	}
 
+	if subcommand == "reconcile" {
+		rf, err := parseReconcileFlags(os.Args[2:])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "flag error: %s\n", err)
+			os.Exit(1)
+		}
+		if err := runReconcile(rf); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %s\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if subcommand != "run" && subcommand != "test" {
-		fmt.Fprintf(os.Stderr, "unknown subcommand %q; expected 'run', 'test', 'version', or 'help'\n", subcommand)
+		fmt.Fprintf(os.Stderr, "unknown subcommand %q; expected 'run', 'test', 'reconcile', 'version', or 'help'\n", subcommand)
 		os.Exit(1)
 	}
 
