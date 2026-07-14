@@ -80,8 +80,17 @@ type stateRow struct {
 // collection is NOT an error: it means this system has never been reconciled (or
 // the state store was just created by this very push), i.e. bootstrap. Prune is
 // simply unavailable until a managed set has been recorded.
+//
+// Rows accumulate one per successful reconcile, so ask the platform for just the
+// newest (applied_at is a real column precisely so it can be sorted server-side);
+// the client-side newest-wins scan below stays as belt-and-braces for any rows
+// written before the column existed.
 func LoadManagedSet(client *cb.DevClient, systemKey string) (managedSet, bool, error) {
-	resp, err := client.GetDataByNameWithSystemKey(systemKey, stateCollection, cb.NewQuery())
+	q := cb.NewQuery()
+	q.Order = []cb.Ordering{{OrderKey: "applied_at", SortOrder: false}} // newest first
+	q.PageSize = 5
+	q.PageNumber = 1
+	resp, err := client.GetDataByNameWithSystemKey(systemKey, stateCollection, q)
 	if err != nil {
 		// Collection absent => bootstrap. Any other failure must not be silently
 		// treated as "no state" or prune would think everything is unmanaged.
@@ -129,16 +138,18 @@ func LoadManagedSet(client *cb.DevClient, systemKey string) (managedSet, bool, e
 // SaveManagedSet appends a new state row recording the current managed set.
 func SaveManagedSet(client *cb.DevClient, systemKey string, managed managedSet) error {
 	keys := subtract(managed, managedSet{}) // sorted slice of every key
+	now := time.Now().UTC().Format(time.RFC3339)
 	blob, err := json.Marshal(stateRow{
 		Managed:   keys,
-		AppliedAt: time.Now().UTC().Format(time.RFC3339),
+		AppliedAt: now,
 		Tool:      "cb-cicd " + version,
 	})
 	if err != nil {
 		return err
 	}
 	if _, err := client.CreateDataByName(systemKey, stateCollection, map[string]interface{}{
-		"state": string(blob),
+		"state":      string(blob),
+		"applied_at": now,
 	}); err != nil {
 		return fmt.Errorf("could not write %s: %w", stateCollection, err)
 	}
