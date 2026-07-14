@@ -113,12 +113,17 @@ func readFilesFrom(path string) ([]string, error) {
 	return files, nil
 }
 
-const helpText = `usage: cb-cicd <run|test|help> [flags]
+const helpText = `usage: cb-cicd <run|test|reconcile|prune|help> [flags]
 
 Subcommands:
-  run   sync matched resources to the ClearBlade platform
-  test  dry run — shows what would be synced without pushing
-  help  show this help message
+  run        sync matched resources to the ClearBlade platform
+  test       dry run — shows what would be synced without pushing
+  reconcile  push the ENTIRE whitelist, converging the system on the repo;
+             -dry-run previews the platform's semantic diff without pushing
+  prune      delete named artifacts (e.g. prune service:foo timer:bar) after
+             their whitelist entries are removed; -dry-run previews. Refuses
+             anything still whitelisted. Never run from CI
+  help       show this help message
 
 Flags:
   -dev-token  <string>   ClearBlade developer token    (env: CICD_DEV_TOKEN)
@@ -152,8 +157,34 @@ func main() {
 		return
 	}
 
+	if subcommand == "reconcile" {
+		rf, err := parseReconcileFlags(os.Args[2:])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "flag error: %s\n", err)
+			os.Exit(1)
+		}
+		if err := runReconcile(rf); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %s\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if subcommand == "prune" {
+		pf, err := parsePruneFlags(os.Args[2:])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "flag error: %s\n", err)
+			os.Exit(1)
+		}
+		if err := runPrune(pf); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %s\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if subcommand != "run" && subcommand != "test" {
-		fmt.Fprintf(os.Stderr, "unknown subcommand %q; expected 'run', 'test', 'version', or 'help'\n", subcommand)
+		fmt.Fprintf(os.Stderr, "unknown subcommand %q; expected 'run', 'test', 'reconcile', 'prune', 'version', or 'help'\n", subcommand)
 		os.Exit(1)
 	}
 

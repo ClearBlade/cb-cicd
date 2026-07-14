@@ -26,6 +26,14 @@ inputs:
     description: cb-cicd release version to download
     required: false
     default: latest
+  mode:
+    description: >-
+      "run" (default) syncs the resources matched by files/files-from. "reconcile"
+      pushes the ENTIRE whitelist — converging the system on the repo — and reports
+      artifacts previously applied that are no longer whitelisted (report-only;
+      pruning is a deliberate manual CLI action, never CI).
+    required: false
+    default: run
 
 runs:
   using: composite
@@ -45,7 +53,10 @@ runs:
       shell: bash
       working-directory: ${{ inputs.dir }}
       run: |
-        if [ -n "${{ inputs.files-from }}" ]; then
+        if [ "${{ inputs.mode }}" = "reconcile" ]; then
+          cb-cicd reconcile \
+            -config "${{ inputs.config }}"
+        elif [ -n "${{ inputs.files-from }}" ]; then
           cb-cicd run \
             -config "${{ inputs.config }}" \
             -files-from "${{ inputs.files-from }}" \
