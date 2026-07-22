@@ -12,16 +12,16 @@ func TestPruneCoversEveryDeployableType(t *testing.T) {
 		"service", "library", "collection", "collection_schema", "trigger", "timer",
 		"webhook", "deployment", "role", "user", "secret", "edge", "device", "plugin",
 		"service_cache", "external_database", "bucket_set", "bucket_set_files",
-		"file_store", "portal", "adaptor", "device_schema", "user_schema", "edge_schema",
+		"file_store", "file_store_files", "portal", "adaptor", "device_schema", "user_schema", "edge_schema",
 	}
 	// Deliberately manual: schema singletons are not deletable artifacts;
-	// bucket_set_files are files inside a bucket set; users/devices/edges are
+	// bucket_set_files/file_store_files are files inside a bucket/store; users/devices/edges are
 	// per-environment principals, not repo artifacts; file_store has no delete API
 	// in the pinned SDK.
 	manual := map[string]bool{
 		"device_schema": true, "user_schema": true, "edge_schema": true,
 		"bucket_set_files": true, "user": true, "device": true, "edge": true,
-		"file_store": true,
+		"file_store": true, "file_store_files": true,
 	}
 
 	for _, typ := range deployable {
@@ -80,5 +80,15 @@ func TestKeyParts(t *testing.T) {
 	}
 	if typ, _ := keyParts("notakey"); typ != "" {
 		t.Fatalf("bare key should yield empty type, got %q", typ)
+	}
+}
+
+func TestResourcePathsFileStoreFiles(t *testing.T) {
+	paths, err := ResourcePaths(SyncResource{Name: "mfe", Type: "file_store_files"})
+	if err != nil {
+		t.Fatalf("file_store_files: unexpected error %v", err)
+	}
+	if len(paths) != 1 || paths[0].Path != "file-stores-files/mfe" || !paths[0].IsDir {
+		t.Fatalf("file_store_files got %+v, want [{file-stores-files/mfe true}]", paths)
 	}
 }
