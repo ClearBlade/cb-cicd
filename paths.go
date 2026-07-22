@@ -59,6 +59,8 @@ func ResourcePaths(r SyncResource) ([]ResourcePath, error) {
 		return []ResourcePath{{Path: fmt.Sprintf("bucket-set-files/%s", n), IsDir: true}}, nil
 	case "file_store":
 		return []ResourcePath{{Path: fmt.Sprintf("file-stores/%s.json", n)}}, nil
+	case "file_store_files":
+		return []ResourcePath{{Path: fmt.Sprintf("file-stores-files/%s", n), IsDir: true}}, nil
 
 	// Directory resources
 	case "portal":
