@@ -59,18 +59,29 @@ var deletableTypes = map[string]func(client *cb.DevClient, systemKey, name strin
 	"external_database": func(c *cb.DevClient, sk, n string) error {
 		return c.DeleteExternalDBConnection(sk, n)
 	},
-	"collection":        deleteCollectionByName,
-	"collection_schema": deleteCollectionByName,
-	"role":              deleteRoleByName,
+	"collection":         deleteCollectionByName,
+	"collection_schema":  deleteCollectionByName,
+	"collection_replace": deleteCollectionByName,
+	"role":               deleteRoleByName,
 }
 
 // deleteCollectionByName resolves the collection's ID (DeleteCollection takes an
 // ID, not a name) and deletes it — rows included, which is what pruning a
 // collection means.
 func deleteCollectionByName(client *cb.DevClient, systemKey, name string) error {
+	id, err := collectionIDByName(client, systemKey, name)
+	if err != nil {
+		return err
+	}
+	return client.DeleteCollection(id)
+}
+
+// collectionIDByName resolves a collection's platform ID from its name (several
+// SDK calls key on the ID, not the name).
+func collectionIDByName(client *cb.DevClient, systemKey, name string) (string, error) {
 	cols, err := client.GetAllCollections(systemKey)
 	if err != nil {
-		return fmt.Errorf("could not list collections: %w", err)
+		return "", fmt.Errorf("could not list collections: %w", err)
 	}
 	for _, c := range cols {
 		m, ok := c.(map[string]interface{})
@@ -80,12 +91,12 @@ func deleteCollectionByName(client *cb.DevClient, systemKey, name string) error 
 		if m["name"] == name {
 			id, _ := m["collectionID"].(string)
 			if id == "" {
-				return fmt.Errorf("collection %q has no collectionID", name)
+				return "", fmt.Errorf("collection %q has no collectionID", name)
 			}
-			return client.DeleteCollection(id)
+			return id, nil
 		}
 	}
-	return fmt.Errorf("collection %q not found on platform (already gone?)", name)
+	return "", fmt.Errorf("collection %q not found on platform (already gone?)", name)
 }
 
 // deleteRoleByName resolves the role's ID (DeleteRole takes an ID).

@@ -125,6 +125,15 @@ Subcommands:
              anything still whitelisted. Never run from CI
   help       show this help message
 
+Row-authoritative collections:
+  collection_replace    like "collection", but after the upsert deletes any
+                        platform row whose item_id is absent from the repo file,
+                        converging the rowset exactly onto the repo. The one
+                        place CI deletes rows — declared per collection, never
+                        inferred. Use only when the repo is the sole source of
+                        truth for the rows (out-of-band writes are dropped on the
+                        next deploy).
+
 Flags:
   -dev-token  <string>   ClearBlade developer token    (env: CICD_DEV_TOKEN)
   -email      <string>   ClearBlade developer email    (env: CICD_EMAIL)
@@ -266,5 +275,10 @@ func runSync(rf runFlags, isDryRun bool) error {
 	}
 	defer os.RemoveAll(tempDir)
 
-	return PushTempDir(tempDir, rf.systemKey, client, isDryRun)
+	if err := PushTempDir(tempDir, rf.systemKey, client, isDryRun); err != nil {
+		return err
+	}
+
+	// Converge any in-scope collection_replace rowsets AFTER the upload.
+	return convergeReplaceCollections(tempDir, rf.systemKey, resources, client, isDryRun)
 }

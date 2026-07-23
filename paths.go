@@ -22,8 +22,10 @@ func ResourcePaths(r SyncResource) ([]ResourcePath, error) {
 	case "library":
 		return []ResourcePath{{Path: fmt.Sprintf("code/libraries/%s", n), IsDir: true}}, nil
 
-	// Both types share the same file on disk; BuildTempDir strips "items" for collection_schema.
-	case "collection", "collection_schema":
+	// All three share the same file on disk; BuildTempDir strips "items" for
+	// collection_schema. collection_replace deploys rows like collection, then
+	// converges the rowset onto the repo afterward (see replace.go).
+	case "collection", "collection_schema", "collection_replace":
 		return []ResourcePath{{Path: fmt.Sprintf("data/%s.json", n)}}, nil
 
 	// Simple single-file resources

@@ -117,5 +117,11 @@ func runReconcile(rf reconcileFlags) error {
 	}
 	defer os.RemoveAll(tempDir)
 
-	return PushTempDir(tempDir, rf.systemKey, client, rf.dryRun)
+	if err := PushTempDir(tempDir, rf.systemKey, client, rf.dryRun); err != nil {
+		return err
+	}
+
+	// Converge any collection_replace rowsets AFTER the upload (repo rows already
+	// present, so the authoritative rows never leave the collection).
+	return convergeReplaceCollections(tempDir, rf.systemKey, cfg.SyncResources, client, rf.dryRun)
 }
