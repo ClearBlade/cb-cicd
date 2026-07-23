@@ -52,3 +52,5 @@ Thumbs.db
 
 # Sample dir for system
 sample/
+# Compiled Go binary (module name)
+/cb-cicd

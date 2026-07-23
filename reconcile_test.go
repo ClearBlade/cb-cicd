@@ -9,7 +9,8 @@ import (
 // prune quietly skip it forever.
 func TestPruneCoversEveryDeployableType(t *testing.T) {
 	deployable := []string{
-		"service", "library", "collection", "collection_schema", "trigger", "timer",
+		"service", "library", "collection", "collection_schema", "collection_replace",
+		"trigger", "timer",
 		"webhook", "deployment", "role", "user", "secret", "edge", "device", "plugin",
 		"service_cache", "external_database", "bucket_set", "bucket_set_files",
 		"file_store", "portal", "adaptor", "device_schema", "user_schema", "edge_schema",
