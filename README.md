@@ -70,6 +70,22 @@ Each entry requires a `name` and a `type`. For collection resources you can also
 }
 ```
 
+For `user` resources, `push_roles` also syncs the user's role memberships from `users/roles/<email>.json`:
+
+```json
+{
+  "sync_resources": [
+    {
+      "name": "svc@clearblade.com",
+      "type": "user",
+      "push_roles": true
+    }
+  ]
+}
+```
+
+When `push_roles` is set, a change to either `users/<email>.json` or `users/roles/<email>.json` syncs the entry, and the platform converges the user's memberships onto the repo's roles file — **adding missing roles and removing any not listed**. It is opt-in per user: without `push_roles`, only the user record is pushed and memberships are left untouched (the historical behavior). A user with no `users/roles/<email>.json` file on disk is fine — the membership file is optional.
+
 ### Supported resource types
 
 | Type                | Description                              |
@@ -83,7 +99,7 @@ Each entry requires a `name` and a `type`. For collection resources you can also
 | `webhook`           | Webhook                                  |
 | `deployment`        | Deployment                               |
 | `role`              | Role                                     |
-| `user`              | User record                              |
+| `user`              | User record (+ role memberships if `push_roles`) |
 | `secret`            | User secret                              |
 | `edge`              | Edge                                     |
 | `device`            | Device                                   |

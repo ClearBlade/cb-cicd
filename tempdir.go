@@ -31,6 +31,9 @@ func BuildTempDir(systemDir string, resources []SyncResource) (string, error) {
 				}
 			} else {
 				if err := copyFile(src, dst); err != nil {
+					if rp.Optional && os.IsNotExist(err) {
+						continue
+					}
 					return tempDir, fmt.Errorf("resource %q: %w", r.Name, err)
 				}
 				if r.Type == "collection_schema" {

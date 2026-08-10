@@ -5,9 +5,12 @@ import "fmt"
 // ResourcePath represents a single path for a resource on disk.
 // IsDir=true means the path is a directory that should be matched by prefix
 // and copied recursively. IsDir=false means it is an exact file path.
+// Optional=true means BuildTempDir tolerates the path being absent on disk
+// (used for the role-membership file, which not every user has).
 type ResourcePath struct {
-	Path  string
-	IsDir bool
+	Path     string
+	IsDir    bool
+	Optional bool
 }
 
 // ResourcePaths returns the disk path(s) for the given sync resource.
@@ -40,7 +43,19 @@ func ResourcePaths(r SyncResource) ([]ResourcePath, error) {
 	case "role":
 		return []ResourcePath{{Path: fmt.Sprintf("roles/%s.json", n)}}, nil
 	case "user":
-		return []ResourcePath{{Path: fmt.Sprintf("users/%s.json", n)}}, nil
+		// The user record and, when push_roles is set, the role-membership
+		// file (users/roles/<email>.json). cblib's zip walker copies the
+		// membership file into the upload and the platform ingest converges the
+		// user's memberships onto it (adds missing, removes extras). Optional so
+		// a user with no membership file on disk does not fail the build.
+		paths := []ResourcePath{{Path: fmt.Sprintf("users/%s.json", n)}}
+		if r.PushRoles {
+			paths = append(paths, ResourcePath{
+				Path:     fmt.Sprintf("users/roles/%s.json", n),
+				Optional: true,
+			})
+		}
+		return paths, nil
 	case "secret":
 		return []ResourcePath{{Path: fmt.Sprintf("secrets/%s.json", n)}}, nil
 	case "edge":

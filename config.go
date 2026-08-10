@@ -10,6 +10,7 @@ type SyncResource struct {
 	Name         string   `json:"name"`
 	Type         string   `json:"type"`
 	PushRows     bool     `json:"push_rows"`
+	PushRoles    bool     `json:"push_roles"`
 	UpsertKey    string   `json:"upsert_key"`
 	SelectedRows []string `json:"selected_rows"`
 }
