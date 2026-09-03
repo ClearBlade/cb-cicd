@@ -84,6 +84,22 @@ func TestKeyParts(t *testing.T) {
 	}
 }
 
+func TestResourcePathsUserShipsRoles(t *testing.T) {
+	paths, err := ResourcePaths(SyncResource{Name: "svc@example.com", Type: "user"})
+	if err != nil {
+		t.Fatalf("user: unexpected error %v", err)
+	}
+	want := []ResourcePath{{Path: "users/svc@example.com.json"}, {Path: "users/roles/svc@example.com.json"}}
+	if len(paths) != len(want) {
+		t.Fatalf("user got %+v, want %+v", paths, want)
+	}
+	for i := range want {
+		if paths[i] != want[i] {
+			t.Fatalf("user path %d got %+v, want %+v", i, paths[i], want[i])
+		}
+	}
+}
+
 func TestResourcePathsFileStoreFiles(t *testing.T) {
 	paths, err := ResourcePaths(SyncResource{Name: "mfe", Type: "file_store_files"})
 	if err != nil {

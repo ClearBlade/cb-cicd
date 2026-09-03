@@ -39,8 +39,14 @@ func ResourcePaths(r SyncResource) ([]ResourcePath, error) {
 		return []ResourcePath{{Path: fmt.Sprintf("deployments/%s.json", n)}}, nil
 	case "role":
 		return []ResourcePath{{Path: fmt.Sprintf("roles/%s.json", n)}}, nil
+	// A user is its record plus its role assignments; the platform reads roles
+	// from users/roles/<email>.json and leaves them untouched when that file is
+	// absent from the upload, so both ship together.
 	case "user":
-		return []ResourcePath{{Path: fmt.Sprintf("users/%s.json", n)}}, nil
+		return []ResourcePath{
+			{Path: fmt.Sprintf("users/%s.json", n)},
+			{Path: fmt.Sprintf("users/roles/%s.json", n)},
+		}, nil
 	case "secret":
 		return []ResourcePath{{Path: fmt.Sprintf("secrets/%s.json", n)}}, nil
 	case "edge":

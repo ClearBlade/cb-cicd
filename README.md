@@ -83,7 +83,7 @@ Each entry requires a `name` and a `type`. For collection resources you can also
 | `webhook`           | Webhook                                  |
 | `deployment`        | Deployment                               |
 | `role`              | Role                                     |
-| `user`              | User record                              |
+| `user`              | User record + role assignments (`users/<email>.json` and `users/roles/<email>.json`, both required) |
 | `secret`            | User secret                              |
 | `edge`              | Edge                                     |
 | `device`            | Device                                   |
